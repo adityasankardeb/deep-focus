@@ -18,13 +18,14 @@ data class FocusUiState(
     val showEarlyExitDialog: Boolean = false
 ) {
     val formattedTime: String get() {
-        val hours = remainingSeconds / 3600
-        val minutes = (remainingSeconds % 3600) / 60
-        val secs = remainingSeconds % 60
-        return if (hours > 0) String.format("%02d:%02d:%02d", hours, minutes, secs)
-        else String.format("%02d:%02d", minutes, secs)
+        val h = remainingSeconds / 3600
+        val m = (remainingSeconds % 3600) / 60
+        val s = remainingSeconds % 60
+        return if (h > 0) String.format("%02d:%02d:%02d", h, m, s)
+        else String.format("%02d:%02d", m, s)
     }
-    val progressFraction: Float get() = if (totalSeconds > 0) 1f - (remainingSeconds.toFloat() / totalSeconds.toFloat()) else 1f
+    val progressFraction: Float get() =
+        if (totalSeconds > 0) 1f - (remainingSeconds.toFloat() / totalSeconds.toFloat()) else 1f
 }
 
 class FocusViewModel : ViewModel() {
@@ -32,10 +33,10 @@ class FocusViewModel : ViewModel() {
     val uiState: StateFlow<FocusUiState> = _uiState.asStateFlow()
     private var timerJob: Job? = null
 
-    fun initializeTimer(durationMinutes: Int) {
+    fun initializeTimer(durationSeconds: Int) {
         if (_uiState.value.isRunning || _uiState.value.totalSeconds > 0) return
-        val totalSeconds = durationMinutes * 60L
-        _uiState.update { it.copy(totalSeconds = totalSeconds, remainingSeconds = totalSeconds, isRunning = false, isFinished = false) }
+        val total = durationSeconds.toLong()
+        _uiState.update { it.copy(totalSeconds = total, remainingSeconds = total, isRunning = false, isFinished = false) }
         startTimer()
     }
 

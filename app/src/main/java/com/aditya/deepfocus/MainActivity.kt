@@ -17,9 +17,6 @@ import androidx.navigation.navArgument
 import com.aditya.deepfocus.ui.screens.FocusScreen
 import com.aditya.deepfocus.ui.screens.HomeScreen
 import com.aditya.deepfocus.ui.theme.DeepFocusTheme
-import java.net.URLDecoder
-import java.net.URLEncoder
-import java.nio.charset.StandardCharsets
 
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
@@ -37,11 +34,9 @@ class MainActivity : ComponentActivity() {
 
 sealed class Screen(val route: String) {
     object Home : Screen("home")
-    object Focus : Screen("focus/{youtubeUrl}/{durationMinutes}") {
-        fun createRoute(youtubeUrl: String, durationMinutes: Int): String {
-            val encoded = URLEncoder.encode(youtubeUrl, StandardCharsets.UTF_8.toString())
-            return "focus/$encoded/$durationMinutes"
-        }
+    object Focus : Screen("focus/{videoId}/{startSeconds}/{endSeconds}") {
+        fun createRoute(videoId: String, startSeconds: Int, endSeconds: Int) =
+            "focus/$videoId/$startSeconds/$endSeconds"
     }
 }
 
@@ -50,21 +45,27 @@ fun DeepFocusNavGraph() {
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = Screen.Home.route) {
         composable(Screen.Home.route) {
-            HomeScreen(onStartSession = { url, minutes ->
-                navController.navigate(Screen.Focus.createRoute(url, minutes))
+            HomeScreen(onStartSession = { videoId, start, end ->
+                navController.navigate(Screen.Focus.createRoute(videoId, start, end))
             })
         }
         composable(
             route = Screen.Focus.route,
             arguments = listOf(
-                navArgument("youtubeUrl") { type = NavType.StringType },
-                navArgument("durationMinutes") { type = NavType.IntType }
+                navArgument("videoId") { type = NavType.StringType },
+                navArgument("startSeconds") { type = NavType.IntType },
+                navArgument("endSeconds") { type = NavType.IntType }
             )
         ) { backStackEntry ->
-            val encodedUrl = backStackEntry.arguments?.getString("youtubeUrl") ?: ""
-            val youtubeUrl = URLDecoder.decode(encodedUrl, StandardCharsets.UTF_8.toString())
-            val durationMinutes = backStackEntry.arguments?.getInt("durationMinutes") ?: 25
-            FocusScreen(youtubeUrl = youtubeUrl, durationMinutes = durationMinutes, onSessionComplete = { navController.popBackStack() })
+            val videoId = backStackEntry.arguments?.getString("videoId") ?: ""
+            val startSeconds = backStackEntry.arguments?.getInt("startSeconds") ?: 0
+            val endSeconds = backStackEntry.arguments?.getInt("endSeconds") ?: 0
+            FocusScreen(
+                videoId = videoId,
+                startSeconds = startSeconds,
+                endSeconds = endSeconds,
+                onSessionComplete = { navController.popBackStack() }
+            )
         }
     }
 }

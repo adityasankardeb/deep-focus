@@ -4,25 +4,28 @@ import android.app.NotificationManager
 import android.content.Context
 import android.content.Intent
 import android.provider.Settings
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardActions
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Lock
-import androidx.compose.material.icons.filled.PlayArrow
-import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
@@ -30,20 +33,26 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aditya.deepfocus.R
 import com.aditya.deepfocus.ui.components.SocialIconButton
 import com.aditya.deepfocus.ui.viewmodel.HomeViewModel
+import com.aditya.deepfocus.ui.viewmodel.extractYouTubeId
+import com.aditya.deepfocus.ui.viewmodel.toTimeString
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun HomeScreen(onStartSession: (String, Int) -> Unit, viewModel: HomeViewModel = viewModel()) {
+fun HomeScreen(
+    onStartSession: (String, Int, Int) -> Unit,
+    viewModel: HomeViewModel = viewModel()
+) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
+    val keyboard = LocalSoftwareKeyboardController.current
     val notificationManager = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
 
     if (uiState.showDndPermissionRationale) {
         AlertDialog(
             onDismissRequest = { viewModel.onDismissDndRationale() },
-            icon = { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.primary) },
+            icon = { Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.primary) },
             title = { Text("DND Permission Required") },
-            text = { Text("Deep Focus needs Do Not Disturb access to silence all notifications during your study session.\n\nYou'll be taken to Settings. Please grant the permission and return.") },
+            text = { Text("Deep Focus needs Do Not Disturb access to block notification sounds during your session.\n\nImportant: Your lecture audio will still play normally — only notification sounds are blocked.\n\nYou'll be taken to Settings — grant permission then return.") },
             confirmButton = { TextButton(onClick = { viewModel.onDismissDndRationale(); context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) }) { Text("Open Settings") } },
             dismissButton = { TextButton(onClick = { viewModel.onDismissDndRationale() }) { Text("Cancel") } }
         )
@@ -53,38 +62,173 @@ fun HomeScreen(onStartSession: (String, Int) -> Unit, viewModel: HomeViewModel =
         AlertDialog(
             onDismissRequest = { viewModel.onDismissPrivacyDialog() },
             title = { Text("Privacy Policy") },
-            text = { Text("This app requires Do Not Disturb and Screen Pinning permissions strictly for local focus sessions. These permissions are used only while a session is active and are immediately restored upon session completion.\n\nNo personal data is collected, stored, or transmitted. No accounts, analytics, or third-party SDKs are used.") },
+            text = { Text("This app requires Do Not Disturb and Screen Pinning permissions strictly for local focus sessions. These permissions are used only while a session is active and are immediately restored upon completion.\n\nNo personal data is collected, stored, or transmitted.") },
             confirmButton = { TextButton(onClick = { viewModel.onDismissPrivacyDialog() }) { Text("Got It") } }
         )
     }
 
     Scaffold(containerColor = MaterialTheme.colorScheme.background) { padding ->
-        Column(modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()), horizontalAlignment = Alignment.CenterHorizontally) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
             Spacer(Modifier.height(48.dp))
+
             Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(80.dp)) {
-                Box(contentAlignment = Alignment.Center) { Icon(Icons.Default.Lock, contentDescription = null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(40.dp)) }
-            }
-            Spacer(Modifier.height(20.dp))
-            Text("Deep Focus", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground)
-            Text("Lock in. No distractions. Just you and the lecture.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp))
-            Spacer(Modifier.height(36.dp))
-            Card(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = RoundedCornerShape(20.dp), colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer), elevation = CardDefaults.cardElevation(0.dp)) {
-                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-                    OutlinedTextField(value = uiState.youtubeUrl, onValueChange = viewModel::onUrlChanged, label = { Text("YouTube Lecture URL") }, placeholder = { Text("https://youtube.com/watch?v=...") }, leadingIcon = { Icon(Icons.Default.VideoLibrary, null) }, isError = uiState.urlError != null, supportingText = { uiState.urlError?.let { Text(it, color = MaterialTheme.colorScheme.error) } }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Next), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp))
-                    OutlinedTextField(value = uiState.durationMinutes, onValueChange = viewModel::onDurationChanged, label = { Text("Duration (Minutes)") }, placeholder = { Text("25") }, leadingIcon = { Icon(Icons.Default.Timer, null) }, isError = uiState.durationError != null, supportingText = { if (uiState.durationError != null) Text(uiState.durationError!!, color = MaterialTheme.colorScheme.error) else Text("Max 480 minutes", color = MaterialTheme.colorScheme.onSurfaceVariant) }, singleLine = true, keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Number, imeAction = ImeAction.Done), modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(14.dp))
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(40.dp))
                 }
             }
-            Spacer(Modifier.height(24.dp))
+            Spacer(Modifier.height(20.dp))
+            Text("Deep Focus", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
+            Text("Lock in. No distractions. Just you and the lecture.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp))
+            Spacer(Modifier.height(32.dp))
+
+            Card(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(20.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                elevation = CardDefaults.cardElevation(0.dp)
+            ) {
+                Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    OutlinedTextField(
+                        value = uiState.youtubeUrl,
+                        onValueChange = viewModel::onUrlChanged,
+                        label = { Text("YouTube Lecture URL") },
+                        placeholder = { Text("https://youtube.com/watch?v=...") },
+                        leadingIcon = { Icon(Icons.Default.VideoLibrary, null) },
+                        trailingIcon = {
+                            if (uiState.youtubeUrl.isNotBlank() && extractYouTubeId(uiState.youtubeUrl) != null) {
+                                if (uiState.isFetchingDuration) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                } else {
+                                    IconButton(onClick = { keyboard?.hide(); viewModel.fetchVideoDuration() }) {
+                                        Icon(Icons.Default.Search, "Load video info", tint = MaterialTheme.colorScheme.primary)
+                                    }
+                                }
+                            }
+                        },
+                        isError = uiState.urlError != null,
+                        supportingText = { uiState.urlError?.let { Text(it, color = MaterialTheme.colorScheme.error) } },
+                        singleLine = true,
+                        keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Uri, imeAction = ImeAction.Search),
+                        keyboardActions = KeyboardActions(onSearch = { keyboard?.hide(); viewModel.fetchVideoDuration() }),
+                        modifier = Modifier.fillMaxWidth(),
+                        shape = RoundedCornerShape(14.dp)
+                    )
+
+                    if (uiState.videoDurationSeconds == 0 && !uiState.isFetchingDuration && uiState.urlError == null) {
+                        Text(
+                            if (uiState.youtubeUrl.isBlank()) "Paste a YouTube URL to get started"
+                            else "Tap the 🔍 search icon or press Search on keyboard to load video info",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+
+                    uiState.fetchError?.let {
+                        Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    }
+                }
+            }
+
+            AnimatedVisibility(visible = uiState.videoDurationSeconds > 0, enter = fadeIn() + expandVertically()) {
+                Card(
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 16.dp),
+                    shape = RoundedCornerShape(20.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainer),
+                    elevation = CardDefaults.cardElevation(0.dp)
+                ) {
+                    Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+
+                        uiState.videoTitle?.let { title ->
+                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                                Icon(Icons.Default.PlayCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
+                                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            }
+                            HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
+                        }
+
+                        Text("Select Section to Watch", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp)
+
+                        val sessionDuration = uiState.endSeconds - uiState.startSeconds
+                        Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f), modifier = Modifier.fillMaxWidth()) {
+                            Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                                Column {
+                                    Text("${uiState.startSeconds.toTimeString()}  →  ${uiState.endSeconds.toTimeString()}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
+                                    Text("Session duration: ${sessionDuration.toTimeString()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+                                }
+                                Icon(Icons.Default.Timer, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                            }
+                        }
+
+                        Column {
+                            Text("▶ Start at: ${uiState.startSeconds.toTimeString()}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Slider(
+                                value = uiState.startSeconds.toFloat(),
+                                onValueChange = { viewModel.onStartSecondsChanged(it.toInt()) },
+                                valueRange = 0f..(uiState.videoDurationSeconds - 10).toFloat(),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.primary, activeTrackColor = MaterialTheme.colorScheme.primary)
+                            )
+                        }
+
+                        Column {
+                            Text("⏹ End at: ${uiState.endSeconds.toTimeString()} / ${uiState.videoDurationSeconds.toTimeString()}", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Slider(
+                                value = uiState.endSeconds.toFloat(),
+                                onValueChange = { viewModel.onEndSecondsChanged(it.toInt()) },
+                                valueRange = 10f..uiState.videoDurationSeconds.toFloat(),
+                                modifier = Modifier.fillMaxWidth(),
+                                colors = SliderDefaults.colors(thumbColor = MaterialTheme.colorScheme.secondary, activeTrackColor = MaterialTheme.colorScheme.secondary)
+                            )
+                        }
+
+                        Text("Quick Presets", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            listOf(
+                                "Full" to Pair(0, uiState.videoDurationSeconds),
+                                "First Half" to Pair(0, uiState.videoDurationSeconds / 2),
+                                "Second Half" to Pair(uiState.videoDurationSeconds / 2, uiState.videoDurationSeconds)
+                            ).forEach { (label, range) ->
+                                FilterChip(
+                                    selected = uiState.startSeconds == range.first && uiState.endSeconds == range.second,
+                                    onClick = { viewModel.onStartSecondsChanged(range.first); viewModel.onEndSecondsChanged(range.second) },
+                                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(20.dp))
+
             Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)) {
                 Row(modifier = Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
                     Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                    Text("Once started, Home and Recents buttons will be disabled until the timer ends.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+                    Text("Once started, Home & Recents are disabled until session ends.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
                 }
             }
-            Spacer(Modifier.height(24.dp))
-            Button(onClick = { val inputs = viewModel.validateAndGetInputs() ?: return@Button; if (!notificationManager.isNotificationPolicyAccessGranted) { viewModel.onShowDndRationale(); return@Button }; onStartSession(inputs.first, inputs.second) }, modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(58.dp), shape = RoundedCornerShape(16.dp)) {
-                Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(22.dp)); Spacer(Modifier.width(10.dp)); Text("Start Deep Work", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
+
+            Spacer(Modifier.height(20.dp))
+
+            Button(
+                onClick = {
+                    val inputs = viewModel.validateAndGetInputs() ?: return@Button
+                    if (!notificationManager.isNotificationPolicyAccessGranted) { viewModel.onShowDndRationale(); return@Button }
+                    onStartSession(inputs.first, inputs.second, inputs.third)
+                },
+                enabled = uiState.videoDurationSeconds > 0 && !uiState.isFetchingDuration,
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).height(58.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(22.dp))
+                Spacer(Modifier.width(10.dp))
+                Text("Start Deep Work", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
+
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.height(32.dp))
             HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant)
@@ -97,7 +241,9 @@ fun HomeScreen(onStartSession: (String, Int) -> Unit, viewModel: HomeViewModel =
                 SocialIconButton(R.drawable.ic_instagram, "Instagram", "https://instagram.com/adityasankardeb_", context)
             }
             Spacer(Modifier.height(8.dp))
-            TextButton(onClick = { viewModel.onShowPrivacyDialog() }) { Text("Privacy Policy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
+            TextButton(onClick = { viewModel.onShowPrivacyDialog() }) {
+                Text("Privacy Policy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
             Spacer(Modifier.height(24.dp))
         }
     }
