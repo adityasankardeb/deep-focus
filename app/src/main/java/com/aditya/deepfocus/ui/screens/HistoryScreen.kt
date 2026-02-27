@@ -61,7 +61,7 @@ fun HistoryScreen(onBack: () -> Unit) {
                 ) {
                     StatCard(
                         modifier = Modifier.weight(1f),
-                        icon = Icons.Default.LocalFire,
+                        icon = Icons.Default.Whatshot,
                         value = "$streak",
                         label = "Day Streak",
                         iconTint = MaterialTheme.colorScheme.error
