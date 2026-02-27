@@ -14,8 +14,7 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
-import com.aditya.deepfocus.ui.screens.FocusScreen
-import com.aditya.deepfocus.ui.screens.HomeScreen
+import com.aditya.deepfocus.ui.screens.*
 import com.aditya.deepfocus.ui.theme.DeepFocusTheme
 
 class MainActivity : ComponentActivity() {
@@ -33,7 +32,9 @@ class MainActivity : ComponentActivity() {
 }
 
 sealed class Screen(val route: String) {
+    object Splash : Screen("splash")
     object Home : Screen("home")
+    object History : Screen("history")
     object Focus : Screen("focus/{videoId}/{startSeconds}/{endSeconds}") {
         fun createRoute(videoId: String, startSeconds: Int, endSeconds: Int) =
             "focus/$videoId/$startSeconds/$endSeconds"
@@ -43,11 +44,24 @@ sealed class Screen(val route: String) {
 @Composable
 fun DeepFocusNavGraph() {
     val navController = rememberNavController()
-    NavHost(navController = navController, startDestination = Screen.Home.route) {
-        composable(Screen.Home.route) {
-            HomeScreen(onStartSession = { videoId, start, end ->
-                navController.navigate(Screen.Focus.createRoute(videoId, start, end))
+    NavHost(navController = navController, startDestination = Screen.Splash.route) {
+        composable(Screen.Splash.route) {
+            SplashScreen(onSplashComplete = {
+                navController.navigate(Screen.Home.route) {
+                    popUpTo(Screen.Splash.route) { inclusive = true }
+                }
             })
+        }
+        composable(Screen.Home.route) {
+            HomeScreen(
+                onStartSession = { videoId, start, end ->
+                    navController.navigate(Screen.Focus.createRoute(videoId, start, end))
+                },
+                onViewHistory = { navController.navigate(Screen.History.route) }
+            )
+        }
+        composable(Screen.History.route) {
+            HistoryScreen(onBack = { navController.popBackStack() })
         }
         composable(
             route = Screen.Focus.route,

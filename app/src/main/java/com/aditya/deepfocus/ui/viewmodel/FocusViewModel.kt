@@ -14,6 +14,7 @@ data class FocusUiState(
     val totalSeconds: Long = 0L,
     val remainingSeconds: Long = 0L,
     val isRunning: Boolean = false,
+    val isPaused: Boolean = false,
     val isFinished: Boolean = false,
     val showEarlyExitDialog: Boolean = false
 ) {
@@ -36,20 +37,31 @@ class FocusViewModel : ViewModel() {
     fun initializeTimer(durationSeconds: Int) {
         if (_uiState.value.isRunning || _uiState.value.totalSeconds > 0) return
         val total = durationSeconds.toLong()
-        _uiState.update { it.copy(totalSeconds = total, remainingSeconds = total, isRunning = false, isFinished = false) }
+        _uiState.update { it.copy(totalSeconds = total, remainingSeconds = total) }
         startTimer()
     }
 
     private fun startTimer() {
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
-            _uiState.update { it.copy(isRunning = true) }
+            _uiState.update { it.copy(isRunning = true, isPaused = false) }
             while (_uiState.value.remainingSeconds > 0) {
                 delay(1000L)
-                _uiState.update { it.copy(remainingSeconds = it.remainingSeconds - 1) }
+                // Only tick if not paused
+                if (!_uiState.value.isPaused) {
+                    _uiState.update { it.copy(remainingSeconds = it.remainingSeconds - 1) }
+                }
             }
             _uiState.update { it.copy(isRunning = false, isFinished = true) }
         }
+    }
+
+    fun pauseTimer() {
+        _uiState.update { it.copy(isPaused = true) }
+    }
+
+    fun resumeTimer() {
+        _uiState.update { it.copy(isPaused = false) }
     }
 
     fun onShowEarlyExitDialog() { _uiState.update { it.copy(showEarlyExitDialog = true) } }
