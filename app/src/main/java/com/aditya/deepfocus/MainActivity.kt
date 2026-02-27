@@ -32,10 +32,11 @@ class MainActivity : ComponentActivity() {
 }
 
 sealed class Screen(val route: String) {
-    object Splash : Screen("splash")
-    object Home : Screen("home")
+    object Splash  : Screen("splash")
+    object Home    : Screen("home")
     object History : Screen("history")
-    object Focus : Screen("focus/{videoId}/{startSeconds}/{endSeconds}") {
+    object About   : Screen("about")
+    object Focus   : Screen("focus/{videoId}/{startSeconds}/{endSeconds}") {
         fun createRoute(videoId: String, startSeconds: Int, endSeconds: Int) =
             "focus/$videoId/$startSeconds/$endSeconds"
     }
@@ -45,6 +46,7 @@ sealed class Screen(val route: String) {
 fun DeepFocusNavGraph() {
     val navController = rememberNavController()
     NavHost(navController = navController, startDestination = Screen.Splash.route) {
+
         composable(Screen.Splash.route) {
             SplashScreen(onSplashComplete = {
                 navController.navigate(Screen.Home.route) {
@@ -52,32 +54,40 @@ fun DeepFocusNavGraph() {
                 }
             })
         }
+
         composable(Screen.Home.route) {
             HomeScreen(
                 onStartSession = { videoId, start, end ->
                     navController.navigate(Screen.Focus.createRoute(videoId, start, end))
                 },
-                onViewHistory = { navController.navigate(Screen.History.route) }
+                onViewHistory = { navController.navigate(Screen.History.route) },
+                onViewAbout   = { navController.navigate(Screen.About.route) }
             )
         }
+
         composable(Screen.History.route) {
             HistoryScreen(onBack = { navController.popBackStack() })
         }
+
+        composable(Screen.About.route) {
+            AboutScreen(onBack = { navController.popBackStack() })
+        }
+
         composable(
             route = Screen.Focus.route,
             arguments = listOf(
-                navArgument("videoId") { type = NavType.StringType },
-                navArgument("startSeconds") { type = NavType.IntType },
-                navArgument("endSeconds") { type = NavType.IntType }
+                navArgument("videoId")       { type = NavType.StringType },
+                navArgument("startSeconds")  { type = NavType.IntType },
+                navArgument("endSeconds")    { type = NavType.IntType }
             )
         ) { backStackEntry ->
-            val videoId = backStackEntry.arguments?.getString("videoId") ?: ""
+            val videoId      = backStackEntry.arguments?.getString("videoId") ?: ""
             val startSeconds = backStackEntry.arguments?.getInt("startSeconds") ?: 0
-            val endSeconds = backStackEntry.arguments?.getInt("endSeconds") ?: 0
+            val endSeconds   = backStackEntry.arguments?.getInt("endSeconds") ?: 0
             FocusScreen(
-                videoId = videoId,
+                videoId      = videoId,
                 startSeconds = startSeconds,
-                endSeconds = endSeconds,
+                endSeconds   = endSeconds,
                 onSessionComplete = { navController.popBackStack() }
             )
         }

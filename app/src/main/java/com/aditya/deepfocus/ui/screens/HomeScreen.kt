@@ -19,6 +19,7 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -43,16 +44,18 @@ import com.aditya.deepfocus.ui.viewmodel.toTimeString
 fun HomeScreen(
     onStartSession: (String, Int, Int) -> Unit,
     onViewHistory: () -> Unit,
+    onViewAbout: () -> Unit,
     viewModel: HomeViewModel = viewModel()
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val keyboard = LocalSoftwareKeyboardController.current
-    val notificationManager = remember { context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager }
+    val notificationManager = remember {
+        context.getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+    }
     val repo = remember { SessionRepository(context) }
     val streak = remember { repo.getCurrentStreak() }
 
-    // Dial pickers
     if (uiState.showStartPicker) {
         TimePickerDialog(
             title = "Set Start Time",
@@ -79,8 +82,15 @@ fun HomeScreen(
             icon = { Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.primary) },
             title = { Text("DND Permission Required") },
             text = { Text("Deep Focus needs Do Not Disturb access to block notification sounds during your session.\n\nYour lecture audio will still play normally.") },
-            confirmButton = { TextButton(onClick = { viewModel.onDismissDndRationale(); context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS)) }) { Text("Open Settings") } },
-            dismissButton = { TextButton(onClick = { viewModel.onDismissDndRationale() }) { Text("Cancel") } }
+            confirmButton = {
+                TextButton(onClick = {
+                    viewModel.onDismissDndRationale()
+                    context.startActivity(Intent(Settings.ACTION_NOTIFICATION_POLICY_ACCESS_SETTINGS))
+                }) { Text("Open Settings") }
+            },
+            dismissButton = {
+                TextButton(onClick = { viewModel.onDismissDndRationale() }) { Text("Cancel") }
+            }
         )
     }
 
@@ -89,7 +99,9 @@ fun HomeScreen(
             onDismissRequest = { viewModel.onDismissPrivacyDialog() },
             title = { Text("Privacy Policy") },
             text = { Text("This app requires Do Not Disturb and Screen Pinning permissions strictly for local focus sessions. No personal data is collected, stored, or transmitted.") },
-            confirmButton = { TextButton(onClick = { viewModel.onDismissPrivacyDialog() }) { Text("Got It") } }
+            confirmButton = {
+                TextButton(onClick = { viewModel.onDismissPrivacyDialog() }) { Text("Got It") }
+            }
         )
     }
 
@@ -103,42 +115,83 @@ fun HomeScreen(
                         Surface(
                             shape = RoundedCornerShape(20.dp),
                             color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.7f),
-                            modifier = Modifier.padding(end = 8.dp)
+                            modifier = Modifier.padding(end = 4.dp)
                         ) {
                             Row(
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                                 verticalAlignment = Alignment.CenterVertically,
                                 horizontalArrangement = Arrangement.spacedBy(4.dp)
                             ) {
-                                Icon(Icons.Default.Whatshot, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(16.dp))
-                                Text("$streak day streak", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onErrorContainer)
+                                Icon(
+                                    Icons.Default.Whatshot, null,
+                                    tint = MaterialTheme.colorScheme.error,
+                                    modifier = Modifier.size(16.dp)
+                                )
+                                Text(
+                                    "$streak day streak",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
                             }
                         }
                     }
+                    IconButton(onClick = onViewAbout) {
+                        Icon(
+                            Icons.Default.Info,
+                            contentDescription = "About",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
                     IconButton(onClick = onViewHistory) {
-                        Icon(Icons.Default.History, contentDescription = "History", tint = MaterialTheme.colorScheme.onSurfaceVariant)
+                        Icon(
+                            Icons.Default.History,
+                            contentDescription = "History",
+                            tint = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
                 },
-                colors = TopAppBarDefaults.topAppBarColors(containerColor = MaterialTheme.colorScheme.background)
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         }
     ) { padding ->
         Column(
-            modifier = Modifier.fillMaxSize().padding(padding).verticalScroll(rememberScrollState()),
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(padding)
+                .verticalScroll(rememberScrollState()),
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Spacer(Modifier.height(16.dp))
-            Surface(shape = RoundedCornerShape(24.dp), color = MaterialTheme.colorScheme.primaryContainer, modifier = Modifier.size(80.dp)) {
+
+            Surface(
+                shape = RoundedCornerShape(24.dp),
+                color = MaterialTheme.colorScheme.primaryContainer,
+                modifier = Modifier.size(80.dp)
+            ) {
                 Box(contentAlignment = Alignment.Center) {
-                    Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(40.dp))
+                    Icon(
+                        Icons.Default.Lock, null,
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.size(40.dp)
+                    )
                 }
             }
+
             Spacer(Modifier.height(16.dp))
             Text("Deep Focus", style = MaterialTheme.typography.displaySmall, fontWeight = FontWeight.Bold)
-            Text("Lock in. No distractions. Just you and the lecture.", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center, modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp))
+            Text(
+                "Lock in. No distractions. Just you and the lecture.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.padding(horizontal = 32.dp, vertical = 8.dp)
+            )
             Spacer(Modifier.height(28.dp))
 
-            // URL input card
+            // ── URL input card ────────────────────────────────────────────
             Card(
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
                 shape = RoundedCornerShape(20.dp),
@@ -179,12 +232,17 @@ fun HomeScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
-                    uiState.fetchError?.let { Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error) }
+                    uiState.fetchError?.let {
+                        Text(it, style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.error)
+                    }
                 }
             }
 
-            // Section selector card — shows after video loaded
-            AnimatedVisibility(visible = uiState.videoDurationSeconds > 0, enter = fadeIn() + expandVertically()) {
+            // ── Section selector ──────────────────────────────────────────
+            AnimatedVisibility(
+                visible = uiState.videoDurationSeconds > 0,
+                enter = fadeIn() + expandVertically()
+            ) {
                 Card(
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp).padding(top = 16.dp),
                     shape = RoundedCornerShape(20.dp),
@@ -193,75 +251,153 @@ fun HomeScreen(
                 ) {
                     Column(modifier = Modifier.padding(20.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
 
-                        // Video title
                         uiState.videoTitle?.let { title ->
-                            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-                                Icon(Icons.Default.PlayCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
-                                Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
-                            if (uiState.isLiveStream) { Surface(shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.error) { Text("  LIVE  ", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold) } }
+                            Row(
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                            ) {
+                                Icon(Icons.Default.PlayCircle, null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp))
+                                Text(
+                                    title,
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    fontWeight = FontWeight.SemiBold,
+                                    maxLines = 2,
+                                    overflow = TextOverflow.Ellipsis,
+                                    modifier = Modifier.weight(1f)
+                                )
+                                if (uiState.isLiveStream) {
+                                    Surface(
+                                        shape = RoundedCornerShape(4.dp),
+                                        color = MaterialTheme.colorScheme.error
+                                    ) {
+                                        Text(
+                                            "  LIVE  ",
+                                            style = MaterialTheme.typography.labelSmall,
+                                            color = Color.White,
+                                            fontWeight = FontWeight.Bold
+                                        )
+                                    }
+                                }
                             }
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }
 
-                        Text("Select Section to Watch", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary, letterSpacing = 1.sp)
+                        Text(
+                            if (uiState.isLiveStream) "Set Session Duration" else "Select Section to Watch",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary,
+                            letterSpacing = 1.sp
+                        )
 
-                        // Session summary pill
                         val sessionDuration = uiState.endSeconds - uiState.startSeconds
-                        Surface(shape = RoundedCornerShape(10.dp), color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f), modifier = Modifier.fillMaxWidth()) {
-                            Row(modifier = Modifier.padding(12.dp), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+                        Surface(
+                            shape = RoundedCornerShape(10.dp),
+                            color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f),
+                            modifier = Modifier.fillMaxWidth()
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                horizontalArrangement = Arrangement.SpaceBetween,
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
                                 Column {
-                                    Text("${uiState.startSeconds.toTimeString()}  →  ${uiState.endSeconds.toTimeString()}", style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onPrimaryContainer)
-                                    Text("Session: ${sessionDuration.toTimeString()}", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f))
+                                    Text(
+                                        if (uiState.isLiveStream) "Duration: ${sessionDuration.toTimeString()}"
+                                        else "${uiState.startSeconds.toTimeString()}  →  ${uiState.endSeconds.toTimeString()}",
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                    Text(
+                                        "Session: ${sessionDuration.toTimeString()}",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                                    )
                                 }
-                                Icon(Icons.Default.Timer, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(22.dp))
+                                Icon(Icons.Default.Timer, null,
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(22.dp))
                             }
                         }
 
-                        // Dial time buttons
                         Row(
                             modifier = Modifier.fillMaxWidth(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            // Start time button
-                            OutlinedButton(
-                                onClick = { viewModel.onShowStartPicker() },
-                                modifier = Modifier.weight(1f).height(64.dp),
-                                shape = RoundedCornerShape(14.dp)
-                            ) {
-                                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("▶ START", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(uiState.startSeconds.toTimeString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.primary)
+                            if (!uiState.isLiveStream) {
+                                OutlinedButton(
+                                    onClick = { viewModel.onShowStartPicker() },
+                                    modifier = Modifier.weight(1f).height(64.dp),
+                                    shape = RoundedCornerShape(14.dp)
+                                ) {
+                                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                                        Text("▶ START", style = MaterialTheme.typography.labelSmall,
+                                            color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                        Text(uiState.startSeconds.toTimeString(),
+                                            style = MaterialTheme.typography.titleMedium,
+                                            fontWeight = FontWeight.Bold,
+                                            color = MaterialTheme.colorScheme.primary)
+                                    }
                                 }
                             }
-
-                            // End time button
                             OutlinedButton(
                                 onClick = { viewModel.onShowEndPicker() },
                                 modifier = Modifier.weight(1f).height(64.dp),
                                 shape = RoundedCornerShape(14.dp),
-                                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.secondary)
+                                colors = ButtonDefaults.outlinedButtonColors(
+                                    contentColor = MaterialTheme.colorScheme.secondary
+                                )
                             ) {
                                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                                    Text("⏹ END", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                                    Text(uiState.endSeconds.toTimeString(), style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.secondary)
+                                    Text(
+                                        if (uiState.isLiveStream) "⏱ DURATION" else "⏹ END",
+                                        style = MaterialTheme.typography.labelSmall,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                    Text(
+                                        uiState.endSeconds.toTimeString(),
+                                        style = MaterialTheme.typography.titleMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.secondary
+                                    )
                                 }
                             }
                         }
 
-                        // Quick presets
-                        Text("Quick Presets", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
-                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                            listOf(
-                                "Full" to Pair(0, uiState.videoDurationSeconds),
-                                "First Half" to Pair(0, uiState.videoDurationSeconds / 2),
-                                "Second Half" to Pair(uiState.videoDurationSeconds / 2, uiState.videoDurationSeconds)
-                            ).forEach { (label, range) ->
-                                FilterChip(
-                                    selected = uiState.startSeconds == range.first && uiState.endSeconds == range.second,
-                                    onClick = { viewModel.applyPreset(range.first, range.second) },
-                                    label = { Text(label, style = MaterialTheme.typography.labelSmall) },
-                                    modifier = Modifier.weight(1f)
-                                )
+                        if (!uiState.isLiveStream) {
+                            Text("Quick Presets",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf(
+                                    "Full" to Pair(0, uiState.videoDurationSeconds),
+                                    "First Half" to Pair(0, uiState.videoDurationSeconds / 2),
+                                    "Second Half" to Pair(uiState.videoDurationSeconds / 2, uiState.videoDurationSeconds)
+                                ).forEach { (label, range) ->
+                                    FilterChip(
+                                        selected = uiState.startSeconds == range.first && uiState.endSeconds == range.second,
+                                        onClick = { viewModel.applyPreset(range.first, range.second) },
+                                        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
+                            }
+                        } else {
+                            Text("Quick Durations",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                listOf("30 min" to 1800, "1 hr" to 3600, "2 hr" to 7200).forEach { (label, secs) ->
+                                    FilterChip(
+                                        selected = uiState.endSeconds == secs,
+                                        onClick = { viewModel.applyPreset(0, secs) },
+                                        label = { Text(label, style = MaterialTheme.typography.labelSmall) },
+                                        modifier = Modifier.weight(1f)
+                                    )
+                                }
                             }
                         }
                     }
@@ -269,17 +405,35 @@ fun HomeScreen(
             }
 
             Spacer(Modifier.height(20.dp))
-            Surface(modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp), shape = RoundedCornerShape(14.dp), color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)) {
-                Row(modifier = Modifier.padding(14.dp), horizontalArrangement = Arrangement.spacedBy(12.dp), verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.Lock, null, tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
-                    Text("Once started, Home & Recents are disabled until session ends.", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onErrorContainer)
+
+            Surface(
+                modifier = Modifier.fillMaxWidth().padding(horizontal = 20.dp),
+                shape = RoundedCornerShape(14.dp),
+                color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.4f)
+            ) {
+                Row(
+                    modifier = Modifier.padding(14.dp),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Icon(Icons.Default.Lock, null,
+                        tint = MaterialTheme.colorScheme.error, modifier = Modifier.size(20.dp))
+                    Text(
+                        "Once started, Home & Recents are disabled until session ends.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onErrorContainer
+                    )
                 }
             }
+
             Spacer(Modifier.height(20.dp))
+
             Button(
                 onClick = {
                     val inputs = viewModel.validateAndGetInputs() ?: return@Button
-                    if (!notificationManager.isNotificationPolicyAccessGranted) { viewModel.onShowDndRationale(); return@Button }
+                    if (!notificationManager.isNotificationPolicyAccessGranted) {
+                        viewModel.onShowDndRationale(); return@Button
+                    }
                     onStartSession(inputs.first, inputs.second, inputs.third)
                 },
                 enabled = uiState.videoDurationSeconds > 0 && !uiState.isFetchingDuration,
@@ -290,19 +444,27 @@ fun HomeScreen(
                 Spacer(Modifier.width(10.dp))
                 Text("Start Deep Work", style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.Bold)
             }
+
             Spacer(Modifier.weight(1f))
             Spacer(Modifier.height(32.dp))
             HorizontalDivider(modifier = Modifier.padding(horizontal = 20.dp), color = MaterialTheme.colorScheme.outlineVariant)
             Spacer(Modifier.height(16.dp))
             Text("Built by Aditya", style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.SemiBold)
-            Text("© 2026 All Rights Reserved Aditya Sankar Deb", style = MaterialTheme.typography.labelSmall, color = MaterialTheme.colorScheme.onSurfaceVariant, textAlign = TextAlign.Center)
+            Text(
+                "© 2026 All Rights Reserved Aditya Sankar Deb",
+                style = MaterialTheme.typography.labelSmall,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                textAlign = TextAlign.Center
+            )
             Spacer(Modifier.height(12.dp))
             Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
                 SocialIconButton(R.drawable.ic_linkedin, "LinkedIn", "https://www.linkedin.com/in/aditya-sankar-deb-a276143b1", context)
                 SocialIconButton(R.drawable.ic_instagram, "Instagram", "https://instagram.com/adityasankardeb_", context)
             }
             Spacer(Modifier.height(8.dp))
-            TextButton(onClick = { viewModel.onShowPrivacyDialog() }) { Text("Privacy Policy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary) }
+            TextButton(onClick = { viewModel.onShowPrivacyDialog() }) {
+                Text("Privacy Policy", style = MaterialTheme.typography.labelMedium, color = MaterialTheme.colorScheme.primary)
+            }
             Spacer(Modifier.height(24.dp))
         }
     }
