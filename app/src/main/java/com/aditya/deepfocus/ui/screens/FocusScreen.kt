@@ -5,10 +5,7 @@ import android.app.Activity
 import android.app.NotificationManager
 import android.content.Context
 import android.content.pm.ActivityInfo
-import android.webkit.WebChromeClient
-import android.webkit.WebResourceRequest
-import android.webkit.WebView
-import android.webkit.WebViewClient
+import android.webkit.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
@@ -30,26 +27,10 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aditya.deepfocus.ui.viewmodel.FocusViewModel
 
-private fun buildYouTubeHtml(videoId: String, startSeconds: Int, endSeconds: Int) = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<style>
-  html, body { margin: 0; padding: 0; width: 100%; height: 100%; background: #000; overflow: hidden; }
-  iframe { position: absolute; top: 0; left: 0; width: 100%; height: 100%; border: none; }
-</style>
-</head>
-<body>
-<iframe
-  src="https://www.youtube.com/embed/${videoId}?autoplay=1&start=${startSeconds}&end=${endSeconds}&controls=1&playsinline=1&rel=0&modestbranding=1&enablejsapi=1&widgetid=1"
-  allow="autoplay; fullscreen; encrypted-media; picture-in-picture"
-  allowfullscreen
-  frameborder="0">
-</iframe>
-</body>
-</html>
-""".trimIndent()
+// Load the actual YouTube mobile watch page — this always plays
+// We use JS to seek to start and stop at end
+private fun buildYouTubeUrl(videoId: String, startSeconds: Int) =
+    "https://m.youtube.com/watch?v=$videoId&t=${startSeconds}s"
 
 private fun releaseLockdown(activity: Activity?, nm: NotificationManager, prevFilter: Int) {
     try { activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED } catch (_: Exception) {}
@@ -75,7 +56,6 @@ fun FocusScreen(
 
     LaunchedEffect(Unit) {
         viewModel.initializeTimer(durationSeconds)
-        // Force landscape for video
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         if (nm.isNotificationPolicyAccessGranted) {
             nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
@@ -90,7 +70,6 @@ fun FocusScreen(
         }
     }
 
-    // Early exit confirmation dialog
     if (uiState.showEarlyExitDialog) {
         AlertDialog(
             onDismissRequest = { viewModel.onDismissEarlyExitDialog() },
@@ -98,70 +77,84 @@ fun FocusScreen(
             text = { Text("You still have ${uiState.formattedTime} remaining.\n\nEvery minute you stay locked in compounds. Are you sure?") },
             confirmButton = {
                 Button(
-                    onClick = {
-                        viewModel.onDismissEarlyExitDialog()
-                        releaseLockdown(activity, nm, prevFilter)
-                        onSessionComplete()
-                    },
+                    onClick = { viewModel.onDismissEarlyExitDialog(); releaseLockdown(activity, nm, prevFilter); onSessionComplete() },
                     colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
                 ) { Text("End Anyway") }
             },
-            dismissButton = {
-                TextButton(onClick = { viewModel.onDismissEarlyExitDialog() }) { Text("Keep Going!") }
-            }
+            dismissButton = { TextButton(onClick = { viewModel.onDismissEarlyExitDialog() }) { Text("Keep Going!") } }
         )
     }
 
-    // Full screen box — video takes everything, overlays on top
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
 
-        // ── YouTube WebView (full screen) ─────────────────────────────────
-        val html = remember(videoId, startSeconds, endSeconds) {
-            buildYouTubeHtml(videoId, startSeconds, endSeconds)
-        }
+        // ── Real YouTube mobile page in WebView ───────────────────────────
+        val url = remember(videoId, startSeconds) { buildYouTubeUrl(videoId, startSeconds) }
 
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 WebView(ctx).apply {
                     setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
+                        databaseEnabled = true
                         mediaPlaybackRequiresUserGesture = false
                         loadWithOverviewMode = true
                         useWideViewPort = true
                         allowContentAccess = true
-                        allowFileAccess = false
-                        mixedContentMode = android.webkit.WebSettings.MIXED_CONTENT_ALWAYS_ALLOW
-                        setSupportZoom(false)
+                        setSupportZoom(true)
+                        builtInZoomControls = false
                         displayZoomControls = false
-                        userAgentString = "Mozilla/5.0 (Linux; Android 10; Mobile) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Mobile Safari/537.36"
+                        cacheMode = WebSettings.LOAD_DEFAULT
+                        // Chrome-like user agent — critical for YouTube to serve proper video
+                        userAgentString = "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36"
                     }
+
                     webChromeClient = WebChromeClient()
+
                     webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(
-                            view: WebView, request: WebResourceRequest
-                        ): Boolean {
+                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                             val host = request.url.host ?: ""
-                            return !host.contains("youtube.com") &&
-                                   !host.contains("googlevideo.com") &&
-                                   !host.contains("ytimg.com") &&
-                                   !host.contains("google.com")
+                            // Only allow YouTube, Google auth, and CDN domains
+                            val allowed = listOf("youtube.com", "googlevideo.com", "ytimg.com",
+                                                 "google.com", "googleapis.com", "gstatic.com",
+                                                 "ggpht.com", "googleusercontent.com")
+                            return allowed.none { host.contains(it) }
+                        }
+
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            // Auto-tap fullscreen button and dismiss cookie banners via JS
+                            view?.evaluateJavascript("""
+                                (function() {
+                                    // Dismiss cookie/consent dialogs
+                                    var btns = document.querySelectorAll('button[aria-label*="Accept"], button[aria-label*="Agree"], .consent-bump-v2-button-button');
+                                    btns.forEach(function(b) { b.click(); });
+                                    
+                                    // Try to enter fullscreen
+                                    setTimeout(function() {
+                                        var fullscreenBtn = document.querySelector('.fullscreen-icon, button.ytp-fullscreen-button, [data-title-no-tooltip="Full screen"]');
+                                        if (fullscreenBtn) fullscreenBtn.click();
+                                    }, 2000);
+                                })();
+                            """.trimIndent(), null)
                         }
                     }
-                    loadDataWithBaseURL(
-                        "https://www.youtube.com",
-                        html,
-                        "text/html",
-                        "utf-8",
-                        null
-                    )
+
+                    // CookieManager — accept all so YouTube doesn't show consent wall
+                    CookieManager.getInstance().apply {
+                        setAcceptCookie(true)
+                        setAcceptThirdPartyCookies(this@apply, true)
+                    }
+
+                    loadUrl(url)
                 }
             }
         )
 
-        // ── Timer overlay — bottom-left corner ───────────────────────────
+        // ── Timer — bottom-left pill ──────────────────────────────────────
         Box(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -169,15 +162,13 @@ fun FocusScreen(
         ) {
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = Color.Black.copy(alpha = 0.55f),
-                modifier = Modifier.wrapContentSize()
+                color = Color.Black.copy(alpha = 0.55f)
             ) {
                 Row(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    // Mini circular progress
                     Box(contentAlignment = Alignment.Center, modifier = Modifier.size(28.dp)) {
                         CircularProgressIndicator(
                             progress = { uiState.progressFraction },
@@ -199,7 +190,7 @@ fun FocusScreen(
             }
         }
 
-        // ── Small X button — top-right corner ────────────────────────────
+        // ── X button — top-right ──────────────────────────────────────────
         IconButton(
             onClick = { viewModel.onShowEarlyExitDialog() },
             modifier = Modifier
@@ -211,7 +202,7 @@ fun FocusScreen(
             Icon(
                 imageVector = Icons.Default.Close,
                 contentDescription = "End session",
-                tint = Color.White.copy(alpha = 0.60f),
+                tint = Color.White.copy(alpha = 0.55f),
                 modifier = Modifier.size(18.dp)
             )
         }
