@@ -27,8 +27,6 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.aditya.deepfocus.ui.viewmodel.FocusViewModel
 
-// Load the actual YouTube mobile watch page — this always plays
-// We use JS to seek to start and stop at end
 private fun buildYouTubeUrl(videoId: String, startSeconds: Int) =
     "https://m.youtube.com/watch?v=$videoId&t=${startSeconds}s"
 
@@ -87,7 +85,6 @@ fun FocusScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
 
-        // ── Real YouTube mobile page in WebView ───────────────────────────
         val url = remember(videoId, startSeconds) { buildYouTubeUrl(videoId, startSeconds) }
 
         AndroidView(
@@ -108,16 +105,18 @@ fun FocusScreen(
                         builtInZoomControls = false
                         displayZoomControls = false
                         cacheMode = WebSettings.LOAD_DEFAULT
-                        // Chrome-like user agent — critical for YouTube to serve proper video
                         userAgentString = "Mozilla/5.0 (Linux; Android 11; Pixel 5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36"
                     }
+
+                    // Fix: pass the WebView instance explicitly, not this@apply
+                    CookieManager.getInstance().setAcceptCookie(true)
+                    CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
 
                     webChromeClient = WebChromeClient()
 
                     webViewClient = object : WebViewClient() {
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                             val host = request.url.host ?: ""
-                            // Only allow YouTube, Google auth, and CDN domains
                             val allowed = listOf("youtube.com", "googlevideo.com", "ytimg.com",
                                                  "google.com", "googleapis.com", "gstatic.com",
                                                  "ggpht.com", "googleusercontent.com")
@@ -126,27 +125,13 @@ fun FocusScreen(
 
                         override fun onPageFinished(view: WebView?, url: String?) {
                             super.onPageFinished(view, url)
-                            // Auto-tap fullscreen button and dismiss cookie banners via JS
                             view?.evaluateJavascript("""
                                 (function() {
-                                    // Dismiss cookie/consent dialogs
-                                    var btns = document.querySelectorAll('button[aria-label*="Accept"], button[aria-label*="Agree"], .consent-bump-v2-button-button');
+                                    var btns = document.querySelectorAll('button[aria-label*="Accept"], button[aria-label*="Agree"]');
                                     btns.forEach(function(b) { b.click(); });
-                                    
-                                    // Try to enter fullscreen
-                                    setTimeout(function() {
-                                        var fullscreenBtn = document.querySelector('.fullscreen-icon, button.ytp-fullscreen-button, [data-title-no-tooltip="Full screen"]');
-                                        if (fullscreenBtn) fullscreenBtn.click();
-                                    }, 2000);
                                 })();
                             """.trimIndent(), null)
                         }
-                    }
-
-                    // CookieManager — accept all so YouTube doesn't show consent wall
-                    CookieManager.getInstance().apply {
-                        setAcceptCookie(true)
-                        setAcceptThirdPartyCookies(this@apply, true)
                     }
 
                     loadUrl(url)
@@ -154,16 +139,9 @@ fun FocusScreen(
             }
         )
 
-        // ── Timer — bottom-left pill ──────────────────────────────────────
-        Box(
-            modifier = Modifier
-                .align(Alignment.BottomStart)
-                .padding(start = 16.dp, bottom = 20.dp)
-        ) {
-            Surface(
-                shape = RoundedCornerShape(10.dp),
-                color = Color.Black.copy(alpha = 0.55f)
-            ) {
+        // Timer — bottom-left
+        Box(modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 20.dp)) {
+            Surface(shape = RoundedCornerShape(10.dp), color = Color.Black.copy(alpha = 0.55f)) {
                 Row(
                     modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp),
                     verticalAlignment = Alignment.CenterVertically,
@@ -179,18 +157,12 @@ fun FocusScreen(
                             color = MaterialTheme.colorScheme.primary
                         )
                     }
-                    Text(
-                        text = uiState.formattedTime,
-                        color = Color.White,
-                        fontSize = 15.sp,
-                        fontWeight = FontWeight.Bold,
-                        letterSpacing = 1.sp
-                    )
+                    Text(uiState.formattedTime, color = Color.White, fontSize = 15.sp, fontWeight = FontWeight.Bold, letterSpacing = 1.sp)
                 }
             }
         }
 
-        // ── X button — top-right ──────────────────────────────────────────
+        // X button — top-right
         IconButton(
             onClick = { viewModel.onShowEarlyExitDialog() },
             modifier = Modifier
@@ -199,12 +171,7 @@ fun FocusScreen(
                 .size(36.dp)
                 .background(Color.Black.copy(alpha = 0.40f), shape = CircleShape)
         ) {
-            Icon(
-                imageVector = Icons.Default.Close,
-                contentDescription = "End session",
-                tint = Color.White.copy(alpha = 0.55f),
-                modifier = Modifier.size(18.dp)
-            )
+            Icon(Icons.Default.Close, contentDescription = "End session", tint = Color.White.copy(alpha = 0.55f), modifier = Modifier.size(18.dp))
         }
     }
 }
