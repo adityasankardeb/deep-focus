@@ -38,13 +38,6 @@ fun Int.toTimeString(): String {
 fun extractYouTubeId(url: String): String? =
     Regex("(?:v=|youtu\\.be/|/embed/)([a-zA-Z0-9_-]{11})").find(url)?.groupValues?.get(1)
 
-fun parseTimeInput(h: String, m: String, s: String): Int {
-    val hours = h.toIntOrNull() ?: 0
-    val mins = m.toIntOrNull() ?: 0
-    val secs = s.toIntOrNull() ?: 0
-    return (hours * 3600 + mins * 60 + secs).coerceAtLeast(0)
-}
-
 class HomeViewModel : ViewModel() {
     private val _uiState = MutableStateFlow(HomeUiState())
     val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
@@ -67,30 +60,38 @@ class HomeViewModel : ViewModel() {
     fun onShowEndPicker() { _uiState.update { it.copy(showEndPicker = true) } }
     fun onDismissEndPicker() { _uiState.update { it.copy(showEndPicker = false) } }
 
-    fun onStartSecondsChanged(value: Int) {
-        _uiState.update { it.copy(startSeconds = value.coerceIn(0, (it.endSeconds - 10).coerceAtLeast(0))) }
+    fun onStartTimeConfirmed(h: Int, m: Int, s: Int) {
+        val total = h * 3600 + m * 60 + s
+        val clamped = total.coerceAtMost(_uiState.value.endSeconds - 10).coerceAtLeast(0)
+        _uiState.update { it.copy(startSeconds = clamped, showStartPicker = false) }
     }
 
-    fun onEndSecondsChanged(value: Int) {
-        _uiState.update { it.copy(endSeconds = value.coerceIn(it.startSeconds + 10, it.videoDurationSeconds)) }
+    fun onEndTimeConfirmed(h: Int, m: Int, s: Int) {
+        val total = h * 3600 + m * 60 + s
+        val clamped = total.coerceAtLeast(_uiState.value.startSeconds + 10)
+            .coerceAtMost(_uiState.value.videoDurationSeconds)
+        _uiState.update { it.copy(endSeconds = clamped, showEndPicker = false) }
     }
 
-    fun applyPreset(startSec: Int, endSec: Int) {
-        _uiState.update { it.copy(startSeconds = startSec, endSeconds = endSec) }
+    fun applyPreset(startSeconds: Int, endSeconds: Int) {
+        _uiState.update { it.copy(startSeconds = startSeconds, endSeconds = endSeconds) }
     }
 
     fun fetchVideoDuration() {
         val url = _uiState.value.youtubeUrl.trim()
         val videoId = extractYouTubeId(url)
-        if (videoId == null) { _uiState.update { it.copy(urlError = "Please enter a valid YouTube URL") }; return }
+        if (videoId == null) {
+            _uiState.update { it.copy(urlError = "Please enter a valid YouTube URL") }
+            return
+        }
         _uiState.update { it.copy(isFetchingDuration = true, fetchError = null, urlError = null) }
         viewModelScope.launch {
             try {
-                val (title, durationSeconds) = withContext(Dispatchers.IO) { fetchVideoInfo(videoId) }
+                val (title, duration) = withContext(Dispatchers.IO) { fetchVideoInfo(videoId) }
                 _uiState.update {
                     it.copy(isFetchingDuration = false, videoTitle = title,
-                        videoDurationSeconds = durationSeconds,
-                        startSeconds = 0, endSeconds = durationSeconds, fetchError = null)
+                        videoDurationSeconds = duration, startSeconds = 0,
+                        endSeconds = duration, fetchError = null)
                 }
             } catch (e: Exception) {
                 _uiState.update {

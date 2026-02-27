@@ -46,7 +46,7 @@ private fun buildHtml(videoId: String, startSeconds: Int, endSeconds: Int) = """
 <body>
 <div id="player"></div>
 <script>
-  var LOCKED_VIDEO_ID = '$videoId';
+  var LOCKED_ID = '$videoId';
   var tag = document.createElement('script');
   tag.src = "https://www.youtube.com/iframe_api";
   document.head.appendChild(tag);
@@ -54,7 +54,7 @@ private fun buildHtml(videoId: String, startSeconds: Int, endSeconds: Int) = """
 
   function onYouTubeIframeAPIReady() {
     player = new YT.Player('player', {
-      videoId: LOCKED_VIDEO_ID,
+      videoId: LOCKED_ID,
       playerVars: {
         autoplay: 1,
         start: $startSeconds,
@@ -64,7 +64,7 @@ private fun buildHtml(videoId: String, startSeconds: Int, endSeconds: Int) = """
         rel: 0,
         modestbranding: 1,
         iv_load_policy: 3,
-        fs: 0,
+        fs: 1,
         origin: 'https://www.youtube.com'
       },
       events: {
@@ -74,40 +74,29 @@ private fun buildHtml(videoId: String, startSeconds: Int, endSeconds: Int) = """
           e.target.playVideo();
         },
         onStateChange: function(e) {
-          if (e.data === YT.PlayerState.ENDED) {
-            Android.onVideoEnded();
+          if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) {
+            Android.onVideoResumed();
           } else if (e.data === YT.PlayerState.PAUSED) {
             Android.onVideoPaused();
-          } else if (e.data === YT.PlayerState.PLAYING) {
-            Android.onVideoResumed();
-          } else if (e.data === YT.PlayerState.BUFFERING) {
-            Android.onVideoResumed();
-          }
-        },
-        onVideoDataChange: function(e) {
-          // If somehow a different video loads, reload the locked one
-          if (player && player.getVideoData) {
-            var data = player.getVideoData();
-            if (data.video_id && data.video_id !== LOCKED_VIDEO_ID) {
-              player.loadVideoById({ videoId: LOCKED_VIDEO_ID, startSeconds: $startSeconds });
-            }
+          } else if (e.data === YT.PlayerState.ENDED) {
+            Android.onVideoEnded();
           }
         }
       }
     });
   }
 
-  // Poll: enforce end time + enforce locked video
+  // Enforce end time + lock video
   setInterval(function() {
-    if (!player) return;
-    if (player.getCurrentTime && player.getCurrentTime() >= $endSeconds) {
+    if (!player || !player.getCurrentTime) return;
+    if (player.getCurrentTime() >= $endSeconds) {
       player.pauseVideo();
       Android.onVideoEnded();
     }
     if (player.getVideoData) {
       var data = player.getVideoData();
-      if (data.video_id && data.video_id !== LOCKED_VIDEO_ID) {
-        player.loadVideoById({ videoId: LOCKED_VIDEO_ID, startSeconds: $startSeconds });
+      if (data.video_id && data.video_id !== LOCKED_ID) {
+        player.loadVideoById({ videoId: LOCKED_ID, startSeconds: $startSeconds });
         Android.onWrongVideoBlocked();
       }
     }
@@ -139,9 +128,8 @@ fun FocusScreen(
     val prevFilter = remember { nm.currentInterruptionFilter }
     val repo = remember { SessionRepository(context) }
     val durationSeconds = endSeconds - startSeconds
-
-    // Show a brief "blocked" snackbar when user tries to navigate to another video
     var showBlockedMessage by remember { mutableStateOf(false) }
+
     LaunchedEffect(showBlockedMessage) {
         if (showBlockedMessage) {
             kotlinx.coroutines.delay(2500)
@@ -150,9 +138,11 @@ fun FocusScreen(
     }
 
     LaunchedEffect(Unit) {
+        // Timer starts PAUSED — only starts when video fires onVideoResumed
         viewModel.initializeTimer(durationSeconds)
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
-        if (nm.isNotificationPolicyAccessGranted) nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        if (nm.isNotificationPolicyAccessGranted)
+            nm.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
         activity?.startLockTask()
     }
 
@@ -209,17 +199,13 @@ fun FocusScreen(
                         override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
                             val url = request.url.toString()
                             val host = request.url.host ?: ""
-                            // Block navigation to any YouTube page that isn't the locked video
                             if (host.contains("youtube.com") || host.contains("youtu.be")) {
-                                val hasLockedId = url.contains(videoId)
-                                if (!hasLockedId) {
-                                    // Block it and snap back
+                                if (!url.contains(videoId)) {
                                     (ctx as? Activity)?.runOnUiThread { showBlockedMessage = true }
                                     return true
                                 }
                             }
-                            // Block all non-YouTube domains entirely
-                            val allowed = listOf("youtube.com", "googlevideo.com", "ytimg.com", "google.com", "googleapis.com", "gstatic.com")
+                            val allowed = listOf("youtube.com","googlevideo.com","ytimg.com","google.com","googleapis.com","gstatic.com")
                             return allowed.none { host.contains(it) }
                         }
                     }
@@ -234,6 +220,7 @@ fun FocusScreen(
                         }
                         @JavascriptInterface
                         fun onVideoResumed() {
+                            // This also fires on first play — so timer starts here, not in LaunchedEffect
                             (ctx as? Activity)?.runOnUiThread { viewModel.resumeTimer() }
                         }
                         @JavascriptInterface
@@ -246,11 +233,11 @@ fun FocusScreen(
             }
         )
 
-        // Timer pill — shows PAUSED state when video is paused
+        // Timer pill — bottom left, orange when paused
         Box(modifier = Modifier.align(Alignment.BottomStart).padding(start = 16.dp, bottom = 20.dp)) {
             Surface(
                 shape = RoundedCornerShape(10.dp),
-                color = if (uiState.isPaused) Color(0xFF1A0A00).copy(alpha = 0.75f)
+                color = if (uiState.isPaused) Color(0xFF2A1500).copy(alpha = 0.85f)
                         else Color.Black.copy(alpha = 0.55f)
             ) {
                 Row(
@@ -265,14 +252,16 @@ fun FocusScreen(
                             strokeWidth = 3.dp,
                             strokeCap = StrokeCap.Round,
                             trackColor = Color.White.copy(alpha = 0.2f),
-                            color = if (uiState.isPaused) Color(0xFFFFB347) else MaterialTheme.colorScheme.primary
+                            color = if (uiState.isPaused) Color(0xFFFFB347)
+                                    else MaterialTheme.colorScheme.primary
                         )
                         if (uiState.isPaused) {
                             Icon(Icons.Default.Pause, null, tint = Color(0xFFFFB347), modifier = Modifier.size(14.dp))
                         }
                     }
                     Text(
-                        text = if (uiState.isPaused) "${uiState.formattedTime} · PAUSED" else uiState.formattedTime,
+                        text = if (uiState.isPaused) "${uiState.formattedTime} · PAUSED"
+                               else uiState.formattedTime,
                         color = if (uiState.isPaused) Color(0xFFFFB347) else Color.White,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Bold,
@@ -282,17 +271,13 @@ fun FocusScreen(
             }
         }
 
-        // "Blocked" toast when user tries to navigate to another video
+        // Blocked toast
         AnimatedVisibility(
             visible = showBlockedMessage,
-            enter = fadeIn(),
-            exit = fadeOut(),
+            enter = fadeIn(), exit = fadeOut(),
             modifier = Modifier.align(Alignment.TopCenter).padding(top = 60.dp)
         ) {
-            Surface(
-                shape = RoundedCornerShape(12.dp),
-                color = MaterialTheme.colorScheme.errorContainer
-            ) {
+            Surface(shape = RoundedCornerShape(12.dp), color = MaterialTheme.colorScheme.errorContainer) {
                 Text(
                     "🔒 Locked to your selected video",
                     modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -303,7 +288,7 @@ fun FocusScreen(
             }
         }
 
-        // X button
+        // X button — top right
         IconButton(
             onClick = { viewModel.onShowEarlyExitDialog() },
             modifier = Modifier

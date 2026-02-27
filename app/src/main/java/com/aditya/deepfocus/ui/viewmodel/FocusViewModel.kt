@@ -14,7 +14,7 @@ data class FocusUiState(
     val totalSeconds: Long = 0L,
     val remainingSeconds: Long = 0L,
     val isRunning: Boolean = false,
-    val isPaused: Boolean = false,
+    val isPaused: Boolean = true, // starts paused — timer only runs when video plays
     val isFinished: Boolean = false,
     val showEarlyExitDialog: Boolean = false
 ) {
@@ -37,17 +37,16 @@ class FocusViewModel : ViewModel() {
     fun initializeTimer(durationSeconds: Int) {
         if (_uiState.value.isRunning || _uiState.value.totalSeconds > 0) return
         val total = durationSeconds.toLong()
-        _uiState.update { it.copy(totalSeconds = total, remainingSeconds = total) }
-        startTimer()
+        _uiState.update { it.copy(totalSeconds = total, remainingSeconds = total, isPaused = true) }
+        startLoop()
     }
 
-    private fun startTimer() {
+    private fun startLoop() {
         timerJob?.cancel()
         timerJob = viewModelScope.launch {
-            _uiState.update { it.copy(isRunning = true, isPaused = false) }
+            _uiState.update { it.copy(isRunning = true) }
             while (_uiState.value.remainingSeconds > 0) {
                 delay(1000L)
-                // Only tick if not paused
                 if (!_uiState.value.isPaused) {
                     _uiState.update { it.copy(remainingSeconds = it.remainingSeconds - 1) }
                 }
@@ -56,14 +55,8 @@ class FocusViewModel : ViewModel() {
         }
     }
 
-    fun pauseTimer() {
-        _uiState.update { it.copy(isPaused = true) }
-    }
-
-    fun resumeTimer() {
-        _uiState.update { it.copy(isPaused = false) }
-    }
-
+    fun pauseTimer() { _uiState.update { it.copy(isPaused = true) } }
+    fun resumeTimer() { _uiState.update { it.copy(isPaused = false) } }
     fun onShowEarlyExitDialog() { _uiState.update { it.copy(showEarlyExitDialog = true) } }
     fun onDismissEarlyExitDialog() { _uiState.update { it.copy(showEarlyExitDialog = false) } }
     override fun onCleared() { super.onCleared(); timerJob?.cancel() }
