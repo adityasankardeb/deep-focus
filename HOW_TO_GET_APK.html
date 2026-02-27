@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Deep Focus — Get Your APK</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap');
+
+  :root {
+    --bg: #0a0f0d;
+    --surface: #111815;
+    --card: #162119;
+    --border: #253d35;
+    --accent: #6ee7b7;
+    --accent2: #60a5fa;
+    --text: #e2f5ee;
+    --muted: #8bada0;
+    --error: #ff7070;
+    --step-size: 36px;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  body {
+    background: var(--bg);
+    color: var(--text);
+    font-family: 'Space Grotesk', sans-serif;
+    min-height: 100vh;
+    padding: 40px 20px 80px;
+  }
+
+  .container { max-width: 760px; margin: 0 auto; }
+
+  header {
+    text-align: center;
+    padding: 48px 0 40px;
+    position: relative;
+  }
+
+  .badge {
+    display: inline-block;
+    background: rgba(110,231,183,0.12);
+    border: 1px solid rgba(110,231,183,0.3);
+    color: var(--accent);
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 2px;
+    text-transform: uppercase;
+    padding: 6px 16px;
+    border-radius: 100px;
+    margin-bottom: 20px;
+  }
+
+  h1 {
+    font-size: clamp(2rem, 5vw, 3rem);
+    font-weight: 700;
+    line-height: 1.1;
+    margin-bottom: 16px;
+  }
+
+  h1 span { color: var(--accent); }
+
+  .subtitle {
+    color: var(--muted);
+    font-size: 1rem;
+    max-width: 500px;
+    margin: 0 auto;
+    line-height: 1.6;
+  }
+
+  .timeline {
+    margin-top: 48px;
+    position: relative;
+  }
+
+  .timeline::before {
+    content: '';
+    position: absolute;
+    left: calc(var(--step-size) / 2 - 1px);
+    top: var(--step-size);
+    bottom: 0;
+    width: 2px;
+    background: linear-gradient(to bottom, var(--accent), transparent);
+    opacity: 0.3;
+  }
+
+  .step {
+    display: flex;
+    gap: 20px;
+    margin-bottom: 32px;
+    position: relative;
+  }
+
+  .step-num {
+    flex-shrink: 0;
+    width: var(--step-size);
+    height: var(--step-size);
+    border-radius: 50%;
+    background: var(--card);
+    border: 2px solid var(--accent);
+    color: var(--accent);
+    font-weight: 700;
+    font-size: 14px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: relative;
+    z-index: 1;
+  }
+
+  .step-content {
+    flex: 1;
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 16px;
+    padding: 20px 24px;
+    margin-top: 2px;
+  }
+
+  .step-content h3 {
+    font-size: 1.05rem;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: var(--text);
+  }
+
+  .step-content p {
+    color: var(--muted);
+    font-size: 0.9rem;
+    line-height: 1.65;
+  }
+
+  .step-content p + p { margin-top: 8px; }
+
+  .highlight {
+    color: var(--accent);
+    font-weight: 600;
+  }
+
+  .highlight2 { color: var(--accent2); font-weight: 600; }
+
+  .url-box {
+    margin-top: 14px;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.85rem;
+    color: var(--accent2);
+    word-break: break-all;
+  }
+
+  .img-hint {
+    margin-top: 14px;
+    background: rgba(96,165,250,0.08);
+    border: 1px solid rgba(96,165,250,0.2);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    color: var(--accent2);
+    line-height: 1.6;
+  }
+
+  .img-hint strong { color: var(--text); }
+
+  .warning-box {
+    margin-top: 14px;
+    background: rgba(255,112,112,0.08);
+    border: 1px solid rgba(255,112,112,0.2);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    color: var(--error);
+    line-height: 1.6;
+  }
+
+  .success-box {
+    margin-top: 14px;
+    background: rgba(110,231,183,0.08);
+    border: 1px solid rgba(110,231,183,0.25);
+    border-radius: 10px;
+    padding: 12px 16px;
+    font-size: 0.85rem;
+    color: var(--accent);
+    line-height: 1.6;
+  }
+
+  .files-grid {
+    margin-top: 14px;
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+
+  .file-item {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 8px 12px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 0.78rem;
+    color: var(--muted);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .file-item::before {
+    content: '📄';
+    font-size: 14px;
+  }
+
+  .file-item.folder::before { content: '📁'; }
+
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 48px 0;
+  }
+
+  .faq-section h2 {
+    font-size: 1.4rem;
+    font-weight: 600;
+    margin-bottom: 24px;
+    color: var(--text);
+  }
+
+  .faq-item {
+    background: var(--card);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 12px;
+  }
+
+  .faq-item .q {
+    font-weight: 600;
+    color: var(--text);
+    font-size: 0.92rem;
+    margin-bottom: 6px;
+  }
+
+  .faq-item .a {
+    color: var(--muted);
+    font-size: 0.88rem;
+    line-height: 1.6;
+  }
+
+  footer {
+    text-align: center;
+    padding-top: 48px;
+    color: var(--muted);
+    font-size: 0.82rem;
+  }
+
+  @media (max-width: 500px) {
+    .files-grid { grid-template-columns: 1fr; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+  <header>
+    <div class="badge">Deep Focus · Build Guide</div>
+    <h1>Get Your <span>APK</span><br>in 5 Minutes</h1>
+    <p class="subtitle">No PC needed. GitHub builds the APK for free on their servers. Follow these steps on your phone or any device.</p>
+  </header>
+
+  <div class="timeline">
+
+    <!-- Step 1 -->
+    <div class="step">
+      <div class="step-num">1</div>
+      <div class="step-content">
+        <h3>Create a free GitHub account</h3>
+        <p>Go to <span class="highlight2">github.com</span> and sign up. It's completely free. If you already have an account, just sign in.</p>
+        <div class="url-box">https://github.com/signup</div>
+      </div>
+    </div>
+
+    <!-- Step 2 -->
+    <div class="step">
+      <div class="step-num">2</div>
+      <div class="step-content">
+        <h3>Create a new repository</h3>
+        <p>After signing in, click the <span class="highlight">+</span> icon (top right) → <span class="highlight">New repository</span>.</p>
+        <div class="img-hint">
+          <strong>Settings to use:</strong><br>
+          • Repository name: <code>deep-focus</code><br>
+          • Visibility: <strong>Public</strong> (required for free Actions minutes)<br>
+          • ✅ Check "Add a README file"<br>
+          • Then click <strong>Create repository</strong>
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 3 -->
+    <div class="step">
+      <div class="step-num">3</div>
+      <div class="step-content">
+        <h3>Upload all the project files</h3>
+        <p>In your new repository, click <span class="highlight">Add file</span> → <span class="highlight">Upload files</span>. Then drag and drop <strong>all the files and folders</strong> from the ZIP I gave you.</p>
+        <div class="img-hint">
+          <strong>Important:</strong> GitHub's upload page lets you drag entire folders. Drag the whole <code>DeepFocusRepo</code> folder contents — not the folder itself, but everything <em>inside</em> it.
+        </div>
+        <p style="margin-top:12px;">You need to upload these key items:</p>
+        <div class="files-grid">
+          <div class="file-item folder">app/</div>
+          <div class="file-item folder">.github/</div>
+          <div class="file-item folder">gradle/</div>
+          <div class="file-item">build.gradle.kts</div>
+          <div class="file-item">settings.gradle.kts</div>
+          <div class="file-item">gradlew</div>
+          <div class="file-item">gradlew.bat</div>
+          <div class="file-item">.gitignore</div>
+        </div>
+        <div class="warning-box">
+          ⚠️ The <code>.github/workflows/build.yml</code> file is critical — it's what triggers the automatic build. Make sure it uploads correctly.
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 4 -->
+    <div class="step">
+      <div class="step-num">4</div>
+      <div class="step-content">
+        <h3>Commit the files</h3>
+        <p>After uploading, scroll down on the upload page. You'll see a <span class="highlight">Commit changes</span> section. Leave the default message and click the green <span class="highlight">Commit changes</span> button.</p>
+        <div class="success-box">
+          ✅ The moment you commit, GitHub automatically starts building your APK. This usually takes 3–6 minutes.
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 5 -->
+    <div class="step">
+      <div class="step-num">5</div>
+      <div class="step-content">
+        <h3>Watch the build run</h3>
+        <p>Click the <span class="highlight2">Actions</span> tab at the top of your repository. You'll see a workflow called <span class="highlight">"Build Debug APK"</span> running with a yellow spinning circle.</p>
+        <div class="img-hint">
+          <strong>Status meanings:</strong><br>
+          🟡 Yellow spinning = Building (wait ~5 min)<br>
+          ✅ Green checkmark = Build succeeded! APK ready.<br>
+          ❌ Red X = Build failed (contact Aditya with the error log)
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 6 -->
+    <div class="step">
+      <div class="step-num">6</div>
+      <div class="step-content">
+        <h3>Download your APK</h3>
+        <p>Once the build shows a <span class="highlight">green checkmark</span>:</p>
+        <p>1. Click on the workflow run name<br>
+           2. Scroll down to the <span class="highlight2">Artifacts</span> section<br>
+           3. Click <span class="highlight">DeepFocus-debug-apk</span> to download a ZIP<br>
+           4. Unzip it — inside is your <code>app-debug.apk</code> file</p>
+        <div class="success-box">
+          🎉 That's your APK! Transfer it to your Android phone via WhatsApp, Telegram, Google Drive, or USB and install it.
+        </div>
+      </div>
+    </div>
+
+    <!-- Step 7 -->
+    <div class="step">
+      <div class="step-num">7</div>
+      <div class="step-content">
+        <h3>Install on your phone</h3>
+        <p>Android blocks unknown sources by default. To install:</p>
+        <p>1. Open the APK file on your phone<br>
+           2. Tap <span class="highlight">Settings</span> when prompted<br>
+           3. Enable <span class="highlight2">Install from this source</span><br>
+           4. Go back and tap <span class="highlight">Install</span></p>
+        <div class="warning-box">
+          ⚠️ After installing, open the app and grant <strong>Do Not Disturb</strong> permission when asked. Without it, DND silencing won't work (the focus lock still works).
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="faq-section">
+    <h2>Common Questions</h2>
+
+    <div class="faq-item">
+      <div class="q">The build failed with a red X. What do I do?</div>
+      <div class="a">Click the red X → click the failing step to expand the log → scroll to the bottom where the error is in red text. Take a screenshot and share it.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="q">I don't see the Artifacts section after the build.</div>
+      <div class="a">Make sure you click on the specific workflow run (the row with the commit message), not just the Actions tab overview. Artifacts appear at the very bottom of the run summary page.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="q">Can I upload files from my phone directly to GitHub?</div>
+      <div class="a">Yes! GitHub's mobile website works fine. Use your phone browser (Chrome/Firefox), go to github.com, and follow the same steps. The upload page accepts folders on mobile too.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="q">How long does the APK artifact stay available?</div>
+      <div class="a">30 days. After that you'd need to re-run the workflow (one click in the Actions tab → "Run workflow" button). You can also re-trigger it anytime by making any small commit.</div>
+    </div>
+
+    <div class="faq-item">
+      <div class="q">Is this APK safe to install?</div>
+      <div class="a">Completely. The source code is all yours — you can read every line of it. The build happens on GitHub's official servers. No external dependencies except standard Google/Android libraries.</div>
+    </div>
+  </div>
+
+  <footer>
+    <p>Built by <strong style="color: var(--accent)">Aditya Sankar Deb</strong></p>
+    <p style="margin-top:4px;">© 2026 All Rights Reserved</p>
+  </footer>
+
+</div>
+</body>
+</html>
