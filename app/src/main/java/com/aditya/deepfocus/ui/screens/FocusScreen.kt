@@ -33,77 +33,52 @@ import com.aditya.deepfocus.data.SessionRecord
 import com.aditya.deepfocus.data.SessionRepository
 import com.aditya.deepfocus.ui.viewmodel.FocusViewModel
 
-private fun buildHtml(videoId: String, startSeconds: Int, endSeconds: Int) = """
-<!DOCTYPE html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-<style>
-  *, html, body { margin:0; padding:0; background:#000; overflow:hidden; width:100%; height:100%; }
-  #player { position:fixed; top:0; left:0; width:100%; height:100%; border:none; }
-</style>
-</head>
-<body>
-<div id="player"></div>
-<script>
-  var LOCKED_ID = '$videoId';
-  var tag = document.createElement('script');
-  tag.src = "https://www.youtube.com/iframe_api";
-  document.head.appendChild(tag);
-  var player;
+// JS injected after page load to hide YouTube header, search, nav — everything except the player
+private val HIDE_CHROME_JS = """
+(function injectHideCSS() {
+    var id = 'df-hide-chrome';
+    if (document.getElementById(id)) return;
+    var s = document.createElement('style');
+    s.id = id;
+    s.textContent = [
+        'ytm-mobile-topbar-renderer',
+        'ytm-pivot-bar-renderer',
+        '.mobile-topbar-renderer',
+        '#appbar',
+        'ytm-searchbox',
+        '.searchbox',
+        'ytm-slim-owner-renderer',
+        'ytm-watch-metadata',
+        'ytm-item-section-renderer',
+        'ytm-section-list-renderer',
+        'ytm-comments-entry-point-header-renderer',
+        '.related-chips-bar-renderer',
+        'ytm-reel-shelf-renderer',
+        '.watch-below-the-fold',
+        '.player-controls-background',
+        'ytm-app-related-endpoint-renderer'
+    ].join(',') + '{display:none!important;visibility:hidden!important;height:0!important;overflow:hidden!important;}' +
+    'video,ytm-watch,.watch-player,#player-container-id,#player,.slim-video-player-container{width:100vw!important;max-width:100vw!important;}' +
+    'body,html{overflow:hidden!important;background:#000!important;}';
+    document.head.appendChild(s);
+})();
+""".trimIndent()
 
-  function onYouTubeIframeAPIReady() {
-    player = new YT.Player('player', {
-      videoId: LOCKED_ID,
-      playerVars: {
-        autoplay: 1,
-        start: $startSeconds,
-        end: $endSeconds,
-        controls: 1,
-        playsinline: 1,
-        rel: 0,
-        modestbranding: 1,
-        iv_load_policy: 3,
-        fs: 1,
-        origin: 'https://www.youtube.com'
-      },
-      events: {
-        onReady: function(e) {
-          e.target.unMute();
-          e.target.setVolume(100);
-          e.target.playVideo();
-        },
-        onStateChange: function(e) {
-          if (e.data === YT.PlayerState.PLAYING || e.data === YT.PlayerState.BUFFERING) {
-            Android.onVideoResumed();
-          } else if (e.data === YT.PlayerState.PAUSED) {
-            Android.onVideoPaused();
-          } else if (e.data === YT.PlayerState.ENDED) {
-            Android.onVideoEnded();
-          }
-        }
-      }
-    });
-  }
-
-  // Enforce end time + lock video
-  setInterval(function() {
-    if (!player || !player.getCurrentTime) return;
-    if (player.getCurrentTime() >= $endSeconds) {
-      player.pauseVideo();
-      Android.onVideoEnded();
+// JS to dismiss consent banners + re-hide elements that YouTube re-renders dynamically
+private val POLL_JS = """
+(function startPoll() {
+    function hideAll() {
+        ['ytm-mobile-topbar-renderer','ytm-pivot-bar-renderer','#appbar','.mobile-topbar-renderer']
+            .forEach(function(sel) {
+                document.querySelectorAll(sel).forEach(function(el){ el.style.display='none'; });
+            });
+        // Dismiss consent banners
+        document.querySelectorAll('button[aria-label*="Accept"],button[aria-label*="Agree"],.consent-bump-v2-button-button')
+            .forEach(function(b){ b.click(); });
     }
-    if (player.getVideoData) {
-      var data = player.getVideoData();
-      if (data.video_id && data.video_id !== LOCKED_ID) {
-        player.loadVideoById({ videoId: LOCKED_ID, startSeconds: $startSeconds });
-        Android.onWrongVideoBlocked();
-      }
-    }
-  }, 1000);
-</script>
-</body>
-</html>
+    hideAll();
+    setInterval(hideAll, 1500);
+})();
 """.trimIndent()
 
 private fun releaseLockdown(activity: Activity?, nm: NotificationManager, prevFilter: Int) {
@@ -138,7 +113,6 @@ fun FocusScreen(
     }
 
     LaunchedEffect(Unit) {
-        // Timer starts PAUSED — only starts when video fires onVideoResumed
         viewModel.initializeTimer(durationSeconds)
         activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
         if (nm.isNotificationPolicyAccessGranted)
@@ -163,7 +137,9 @@ fun FocusScreen(
                 Button(
                     onClick = {
                         viewModel.onDismissEarlyExitDialog()
-                        repo.saveSession(SessionRecord(videoId, durationSeconds - uiState.remainingSeconds.toInt(), System.currentTimeMillis(), false))
+                        repo.saveSession(SessionRecord(videoId,
+                            durationSeconds - uiState.remainingSeconds.toInt(),
+                            System.currentTimeMillis(), false))
                         releaseLockdown(activity, nm, prevFilter)
                         onSessionComplete()
                     },
@@ -176,39 +152,116 @@ fun FocusScreen(
 
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
 
-        val html = remember(videoId, startSeconds, endSeconds) { buildHtml(videoId, startSeconds, endSeconds) }
+        // Build URL — real mobile YouTube watch page, NOT embed
+        // This bypasses the embedding restriction entirely
+        val url = remember(videoId, startSeconds) {
+            "https://m.youtube.com/watch?v=$videoId&t=${startSeconds}s"
+        }
 
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
                 WebView(ctx).apply {
                     setLayerType(android.view.View.LAYER_TYPE_HARDWARE, null)
+
                     settings.apply {
                         javaScriptEnabled = true
                         domStorageEnabled = true
+                        databaseEnabled = true
                         mediaPlaybackRequiresUserGesture = false
                         loadWithOverviewMode = true
                         useWideViewPort = true
+                        allowContentAccess = true
                         setSupportZoom(false)
-                        userAgentString = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                        builtInZoomControls = false
+                        displayZoomControls = false
+                        cacheMode = WebSettings.LOAD_DEFAULT
+                        // Mobile Chrome UA — YouTube serves working video player
+                        userAgentString = "Mozilla/5.0 (Linux; Android 13; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.6099.144 Mobile Safari/537.36"
                     }
+
                     CookieManager.getInstance().setAcceptCookie(true)
                     CookieManager.getInstance().setAcceptThirdPartyCookies(this, true)
-                    webChromeClient = WebChromeClient()
-                    webViewClient = object : WebViewClient() {
-                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
-                            val url = request.url.toString()
-                            val host = request.url.host ?: ""
-                            if (host.contains("youtube.com") || host.contains("youtu.be")) {
-                                if (!url.contains(videoId)) {
-                                    (ctx as? Activity)?.runOnUiThread { showBlockedMessage = true }
-                                    return true
-                                }
+
+                    webChromeClient = object : WebChromeClient() {
+                        // Required for video to go fullscreen inside WebView
+                        private var customView: android.view.View? = null
+                        private var customViewCallback: CustomViewCallback? = null
+
+                        override fun onShowCustomView(view: android.view.View, callback: CustomViewCallback) {
+                            customView = view
+                            customViewCallback = callback
+                            (ctx as? Activity)?.window?.decorView?.let { decor ->
+                                (decor as? android.view.ViewGroup)?.addView(view)
                             }
-                            val allowed = listOf("youtube.com","googlevideo.com","ytimg.com","google.com","googleapis.com","gstatic.com")
-                            return allowed.none { host.contains(it) }
+                            (ctx as? Activity)?.window?.addFlags(android.view.WindowManager.LayoutParams.FLAG_FULLSCREEN)
+                        }
+
+                        override fun onHideCustomView() {
+                            (ctx as? Activity)?.window?.decorView?.let { decor ->
+                                (decor as? android.view.ViewGroup)?.removeView(customView)
+                            }
+                            customViewCallback?.onCustomViewHidden()
+                            customView = null
                         }
                     }
+
+                    webViewClient = object : WebViewClient() {
+                        override fun shouldOverrideUrlLoading(view: WebView, request: WebResourceRequest): Boolean {
+                            val reqUrl = request.url.toString()
+                            val host = request.url.host ?: ""
+
+                            // Block navigation to any different video
+                            if (host.contains("youtube.com") || host.contains("youtu.be")) {
+                                if (!reqUrl.contains(videoId)) {
+                                    (ctx as? Activity)?.runOnUiThread { showBlockedMessage = true }
+                                    return true // block it
+                                }
+                                return false // allow same video navigation (quality change, etc)
+                            }
+
+                            // Allow YouTube CDN domains
+                            val allowed = listOf("youtube.com", "googlevideo.com", "ytimg.com",
+                                "google.com", "googleapis.com", "gstatic.com",
+                                "ggpht.com", "googleusercontent.com")
+                            return allowed.none { host.contains(it) }
+                        }
+
+                        override fun onPageFinished(view: WebView?, url: String?) {
+                            super.onPageFinished(view, url)
+                            // Inject CSS to hide header/search/nav
+                            view?.evaluateJavascript(HIDE_CHROME_JS, null)
+                            // Start polling to re-hide dynamic elements + dismiss banners
+                            view?.evaluateJavascript(POLL_JS, null)
+
+                            // Also set up a JS interval to detect play/pause state
+                            // YouTube mobile uses HTML5 video element directly
+                            view?.evaluateJavascript("""
+                                (function() {
+                                    function attachVideoListeners() {
+                                        var video = document.querySelector('video');
+                                        if (!video) { setTimeout(attachVideoListeners, 500); return; }
+                                        video.addEventListener('play', function() { Android.onVideoResumed(); });
+                                        video.addEventListener('pause', function() { Android.onVideoPaused(); });
+                                        video.addEventListener('playing', function() { Android.onVideoResumed(); });
+                                        video.addEventListener('waiting', function() { Android.onVideoResumed(); });
+                                        
+                                        // Enforce end time for non-live videos
+                                        if (${endSeconds} > 0) {
+                                            setInterval(function() {
+                                                if (video.currentTime >= ${endSeconds}) {
+                                                    video.pause();
+                                                    Android.onVideoEnded();
+                                                }
+                                            }, 1000);
+                                        }
+                                    }
+                                    attachVideoListeners();
+                                })();
+                            """.trimIndent(), null)
+                        }
+                    }
+
                     addJavascriptInterface(object : Any() {
                         @JavascriptInterface
                         fun onVideoEnded() {
@@ -220,15 +273,11 @@ fun FocusScreen(
                         }
                         @JavascriptInterface
                         fun onVideoResumed() {
-                            // This also fires on first play — so timer starts here, not in LaunchedEffect
                             (ctx as? Activity)?.runOnUiThread { viewModel.resumeTimer() }
                         }
-                        @JavascriptInterface
-                        fun onWrongVideoBlocked() {
-                            (ctx as? Activity)?.runOnUiThread { showBlockedMessage = true }
-                        }
                     }, "Android")
-                    loadDataWithBaseURL("https://www.youtube.com", html, "text/html", "utf-8", null)
+
+                    loadUrl(url)
                 }
             }
         )
@@ -288,7 +337,7 @@ fun FocusScreen(
             }
         }
 
-        // X button — top right
+        // X button
         IconButton(
             onClick = { viewModel.onShowEarlyExitDialog() },
             modifier = Modifier
@@ -297,7 +346,8 @@ fun FocusScreen(
                 .size(36.dp)
                 .background(Color.Black.copy(alpha = 0.40f), shape = CircleShape)
         ) {
-            Icon(Icons.Default.Close, contentDescription = "End session", tint = Color.White.copy(alpha = 0.55f), modifier = Modifier.size(18.dp))
+            Icon(Icons.Default.Close, contentDescription = "End session",
+                tint = Color.White.copy(alpha = 0.55f), modifier = Modifier.size(18.dp))
         }
     }
 }

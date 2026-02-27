@@ -198,6 +198,7 @@ fun HomeScreen(
                             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                                 Icon(Icons.Default.PlayCircle, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(20.dp))
                                 Text(title, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.SemiBold, maxLines = 2, overflow = TextOverflow.Ellipsis)
+                            if (uiState.isLiveStream) { Surface(shape = RoundedCornerShape(4.dp), color = MaterialTheme.colorScheme.error) { Text("  LIVE  ", style = MaterialTheme.typography.labelSmall, color = Color.White, fontWeight = FontWeight.Bold) } }
                             }
                             HorizontalDivider(color = MaterialTheme.colorScheme.outlineVariant)
                         }

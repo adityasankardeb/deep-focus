@@ -25,6 +25,7 @@ data class HomeUiState(
     val endSeconds: Int = 0,
     val showStartPicker: Boolean = false,
     val showEndPicker: Boolean = false,
+    val isLiveStream: Boolean = false,
 )
 
 fun Int.toTimeString(): String {
@@ -44,9 +45,12 @@ class HomeViewModel : ViewModel() {
 
     fun onUrlChanged(url: String) {
         _uiState.update {
-            it.copy(youtubeUrl = url, urlError = null, fetchError = null,
+            it.copy(
+                youtubeUrl = url, urlError = null, fetchError = null,
                 videoTitle = null, videoDurationSeconds = 0,
-                startSeconds = 0, endSeconds = 0, isFetchingDuration = false)
+                startSeconds = 0, endSeconds = 0, isFetchingDuration = false,
+                isLiveStream = false
+            )
         }
     }
 
@@ -54,7 +58,6 @@ class HomeViewModel : ViewModel() {
     fun onDismissPrivacyDialog() { _uiState.update { it.copy(showPrivacyDialog = false) } }
     fun onShowDndRationale() { _uiState.update { it.copy(showDndPermissionRationale = true) } }
     fun onDismissDndRationale() { _uiState.update { it.copy(showDndPermissionRationale = false) } }
-
     fun onShowStartPicker() { _uiState.update { it.copy(showStartPicker = true) } }
     fun onDismissStartPicker() { _uiState.update { it.copy(showStartPicker = false) } }
     fun onShowEndPicker() { _uiState.update { it.copy(showEndPicker = true) } }
@@ -87,41 +90,89 @@ class HomeViewModel : ViewModel() {
         _uiState.update { it.copy(isFetchingDuration = true, fetchError = null, urlError = null) }
         viewModelScope.launch {
             try {
-                val (title, duration) = withContext(Dispatchers.IO) { fetchVideoInfo(videoId) }
-                _uiState.update {
-                    it.copy(isFetchingDuration = false, videoTitle = title,
-                        videoDurationSeconds = duration, startSeconds = 0,
-                        endSeconds = duration, fetchError = null)
+                val info = withContext(Dispatchers.IO) { fetchVideoInfo(videoId) }
+                if (info.isLive) {
+                    // Live stream — no start/end concept, session duration chosen by user
+                    // We set a generous default duration of 2 hours for live streams
+                    val defaultDuration = 7200
+                    _uiState.update {
+                        it.copy(
+                            isFetchingDuration = false,
+                            videoTitle = info.title,
+                            videoDurationSeconds = defaultDuration,
+                            startSeconds = 0,
+                            endSeconds = defaultDuration,
+                            isLiveStream = true,
+                            fetchError = null
+                        )
+                    }
+                } else {
+                    _uiState.update {
+                        it.copy(
+                            isFetchingDuration = false,
+                            videoTitle = info.title,
+                            videoDurationSeconds = info.durationSeconds,
+                            startSeconds = 0,
+                            endSeconds = info.durationSeconds,
+                            isLiveStream = false,
+                            fetchError = null
+                        )
+                    }
                 }
             } catch (e: Exception) {
                 _uiState.update {
-                    it.copy(isFetchingDuration = false,
+                    it.copy(
+                        isFetchingDuration = false,
                         fetchError = "Could not fetch video info. Check your internet and URL.",
-                        videoTitle = null, videoDurationSeconds = 0)
+                        videoTitle = null, videoDurationSeconds = 0
+                    )
                 }
             }
         }
     }
 
-    private fun fetchVideoInfo(videoId: String): Pair<String, Int> {
+    private data class VideoInfo(val title: String, val durationSeconds: Int, val isLive: Boolean)
+
+    private fun fetchVideoInfo(videoId: String): VideoInfo {
         val title = try {
             val json = URL("https://www.youtube.com/oembed?url=https://www.youtube.com/watch?v=$videoId&format=json").readText()
             JSONObject(json).optString("title", "YouTube Video")
         } catch (e: Exception) { "YouTube Video" }
+
         val pageHtml = URL("https://www.youtube.com/watch?v=$videoId").readText()
+
+        // Detect live stream
+        val isLive = pageHtml.contains("\"isLive\":true") ||
+                     pageHtml.contains("\"liveBroadcastDetails\"") ||
+                     pageHtml.contains("\"isLiveContent\":true") ||
+                     pageHtml.contains("BADGE_STYLE_TYPE_LIVE_NOW")
+
+        if (isLive) return VideoInfo(title, 0, true)
+
         val durationMs = Regex(""""approxDurationMs":"(\d+)"""").find(pageHtml)?.groupValues?.get(1)?.toLongOrNull()
-        if (durationMs != null) return Pair(title, (durationMs / 1000).toInt())
+        if (durationMs != null) return VideoInfo(title, (durationMs / 1000).toInt(), false)
+
         val lengthSeconds = Regex(""""lengthSeconds":"(\d+)"""").find(pageHtml)?.groupValues?.get(1)?.toIntOrNull()
-        if (lengthSeconds != null) return Pair(title, lengthSeconds)
+        if (lengthSeconds != null) return VideoInfo(title, lengthSeconds, false)
+
         throw Exception("Duration not found")
     }
 
     fun validateAndGetInputs(): Triple<String, Int, Int>? {
         val state = _uiState.value
         val videoId = extractYouTubeId(state.youtubeUrl.trim())
-        if (videoId == null) { _uiState.update { it.copy(urlError = "Please enter a valid YouTube URL") }; return null }
-        if (state.videoDurationSeconds <= 0) { _uiState.update { it.copy(fetchError = "Please load the video info first") }; return null }
-        if (state.endSeconds - state.startSeconds < 10) { _uiState.update { it.copy(fetchError = "Select at least 10 seconds") }; return null }
+        if (videoId == null) {
+            _uiState.update { it.copy(urlError = "Please enter a valid YouTube URL") }
+            return null
+        }
+        if (state.videoDurationSeconds <= 0) {
+            _uiState.update { it.copy(fetchError = "Please load the video info first") }
+            return null
+        }
+        if (!state.isLiveStream && state.endSeconds - state.startSeconds < 10) {
+            _uiState.update { it.copy(fetchError = "Select at least 10 seconds") }
+            return null
+        }
         return Triple(videoId, state.startSeconds, state.endSeconds)
     }
 }
