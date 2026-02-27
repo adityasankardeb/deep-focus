@@ -141,7 +141,9 @@ DND is set to `INTERRUPTION_FILTER_PRIORITY` (not `FILTER_NONE`), which silences
 
 ---
 
-[![DOWNLOAD NOW](https://drive.google.com/file/d/1yTK2SRAv5H6pCzvQNohHcqhq_3KzLQWF/view?usp=drivesdk)
+### 📥 Get the App
+**[Click Here to Download the Latest APK from Google Drive](https://drive.google.com/file/d/1yTK2SRAv5H6pCzvQNohHcqhq_3KzLQWF/view?usp=drivesdk)**
+
 
 ## Privacy Policy
 
