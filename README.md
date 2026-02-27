@@ -141,6 +141,8 @@ DND is set to `INTERRUPTION_FILTER_PRIORITY` (not `FILTER_NONE`), which silences
 
 ---
 
+[![DOWNLOAD NOW](https://drive.google.com/file/d/1yTK2SRAv5H6pCzvQNohHcqhq_3KzLQWF/view?usp=drivesdk)
+
 ## Privacy Policy
 
 This app requires Do Not Disturb and Screen Pinning permissions strictly for local focus sessions. These permissions are used only while a session is active and are immediately restored upon completion.
